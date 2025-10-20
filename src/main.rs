@@ -6,9 +6,13 @@ use std::process::exit;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style, Stylize};
+use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::style::palette::material::{BLUE, GREEN};
+use ratatui::style::palette::tailwind::SLATE;
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, Widget, Wrap};
+
+
 
 fn main() -> io::Result<()> {
     let mut terminal = init();
@@ -90,6 +94,8 @@ impl App {
     fn handle_key_events(&mut self, key_event: KeyEvent){
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
+            KeyCode::Up => self.previous(),
+            KeyCode::Down => self.next(),
             KeyCode::Char(c) => self.input.push(c),
             KeyCode::Enter => self.input.push('\n'),
             KeyCode::Backspace => {
@@ -101,6 +107,57 @@ impl App {
 
     fn exit(&mut self){
         self.exit = true;
+    }
+
+    fn next(&mut self){
+        self.notes.state.select_next();
+    }
+    fn previous(&mut self){
+        self.notes.state.select_previous();
+    }
+
+
+    fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
+
+        let block = Block::new()
+            .title(Line::raw("TODO List").centered())
+            .borders(Borders::ALL);
+
+        let list_items: Vec<ListItem> = self
+            .notes
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, note)| {
+                let style = if Some(i) == self.notes.state.selected() {
+                    Style::default().fg(Color::Blue).bg(Color::White)
+                } else {
+                    Style::default()
+                };
+                ListItem::new(note.clone()).style(style)
+            })
+            .collect();
+
+        let list = List::new(list_items)
+            .block(block)
+            .highlight_symbol(">") // optional
+            .highlight_spacing(HighlightSpacing::Always);
+
+        list.render(area, buf);
+    }
+
+    fn render_editor(&mut self, area: Rect, buf: &mut Buffer) {
+        let text = Text::raw(self.input.as_str());
+        let editor: Paragraph = Paragraph::new(text)
+            .block(
+                Block::default()
+                    .title(Line::from("q to quit").left_aligned())
+                    .title(Line::from("Middle Title").centered())
+                    .title(Line::from("Right Title").right_aligned())
+                    .borders(Borders::ALL)
+            );
+
+        editor.render(area, buf);
     }
 
 }
@@ -117,29 +174,8 @@ impl Widget for &mut App {
             .split(area);
 
 
-        let list_items: Vec<ListItem> = self
-            .notes.items
-            .iter()
-            .map(|note| ListItem::new(note.clone()))
-            .collect();
-
-        let list = List::new(list_items)
-            .block(Block::default().borders(Borders::ALL).title("Notes"))
-            .scroll_padding(0);
-
-        list.render(layout[0], buf);
-
-        let text = Text::raw(self.input.as_str());
-        let editor: Paragraph = Paragraph::new(text)
-            .block(
-                Block::default()
-                    .title(Line::from("q to quit").left_aligned())
-                    .title(Line::from("Middle Title").centered())
-                    .title(Line::from("Right Title").right_aligned())
-                    .borders(Borders::ALL)
-            );
-
-        editor.render(layout[1], buf);
+        self.render_list(layout[0], buf);
+        self.render_editor(layout[1], buf);
 
     }
 }
