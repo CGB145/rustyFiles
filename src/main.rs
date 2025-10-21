@@ -113,6 +113,9 @@ impl App {
         self.notes.state.select_next();
     }
     fn previous(&mut self){
+        if self.notes.state.selected().unwrap_or(0) == 0 {
+            self.notes.state.select(Some(self.notes.items.len()));
+        }
         self.notes.state.select_previous();
     }
 
@@ -123,12 +126,13 @@ impl App {
             .title(Line::raw("TODO List").centered())
             .borders(Borders::ALL);
 
-        let list_items: Vec<ListItem> = self
+        let mut list_items: Vec<ListItem> = self
             .notes
             .items
             .iter()
             .enumerate()
             .map(|(i, note)| {
+
                 let style = if Some(i) == self.notes.state.selected() {
                     Style::default().fg(Color::Blue).bg(Color::White)
                 } else {
@@ -138,11 +142,30 @@ impl App {
             })
             .collect();
 
-        let list = List::new(list_items)
-            .block(block)
-            .highlight_symbol(">") // optional
-            .highlight_spacing(HighlightSpacing::Always);
+        let mut selected_index = self.notes.state.selected().unwrap_or(0);
+        let len = list_items.len();
 
+        // If selected index is out of bounds or at the end, reset to 0
+        if let Some(mut selected_index) = self.notes.state.selected() {
+            let len = list_items.len();
+
+            // If selected index is at or beyond the end, reset to 0
+            if selected_index >= len {
+                selected_index = 0;
+                self.notes.state.select(Some(0)); // ✅ update actual selection state
+            }
+
+            // Remove all items before the selected index
+            if selected_index > 0 {
+                list_items.drain(0..selected_index);
+            }
+        } else {
+            // If there was no selection at all, default to 0
+            self.notes.state.select(Some(0));
+        }
+
+        let list = List::new(list_items)
+            .block(block);
         list.render(area, buf);
     }
 
