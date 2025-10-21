@@ -1,6 +1,7 @@
 use ratatui::*;
 use crossterm::*;
 use std::{fs, io};
+use std::process::Command;
 use std::fs::File;
 use std::process::exit;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -26,9 +27,11 @@ pub struct App {
     exit: bool,
     input: String,
     notes: FileList,
+
 }
 
 pub struct FileList{
+    path: std::path::PathBuf,
     items: Vec<String>,
     state: ListState,
 }
@@ -40,6 +43,7 @@ impl Default for App {
             exit: false,
             input: String::from(""),
             notes: FileList::default(),
+
         }
     }
 }
@@ -48,20 +52,15 @@ impl Default for FileList {
     fn default() -> Self {
         let mut notes = Vec::new();
 
-        if let Ok(entries) = fs::read_dir("./notes") {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                            notes.push(name.to_string());
-                        }
-                    }
-                }
-            }
+        let path = std::env::current_dir().unwrap(); // current directory
+
+        for entry in fs::read_dir(&path).unwrap() {
+            let entry = entry.unwrap();
+                notes.push(entry.path().to_string_lossy().to_string());
         }
 
         Self {
+            path,
             items: notes,
             state: ListState::default(),
         }
@@ -96,7 +95,17 @@ impl App {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Up => self.previous(),
             KeyCode::Down => self.next(),
-            KeyCode::Char(c) => self.input.push(c),
+            // KeyCode::Char(c) => self.input.push(c),
+            // KeyCode::PageUp => self.input.push_str(self.notes.items.join(" ").as_str()),
+            KeyCode::PageUp => self.input.push_str(self.notes.path.to_str().unwrap()),
+            KeyCode::PageDown => self.input.push_str(self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str()),
+            KeyCode::End => {
+                Command::new("bash")
+                    .arg("-c")
+                    .arg("cd ../")
+                    .output()
+                    .expect("Failed to execute command");
+            }
             KeyCode::Enter => self.input.push('\n'),
             KeyCode::Backspace => {
                 self.input.pop();
@@ -122,9 +131,15 @@ impl App {
 
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
 
+        let selected_item = self.notes.state.selected();
+        let  item_info = selected_item.map(|i| i.to_string()).unwrap_or_default();
+
+
         let block = Block::new()
-            .title(Line::raw("TODO List").centered())
-            .borders(Borders::ALL);
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(Line::from("↑ select ↓").left_aligned())
+            .title(Line::from(item_info).centered());
 
         let mut list_items: Vec<ListItem> = self
             .notes
@@ -133,7 +148,7 @@ impl App {
             .enumerate()
             .map(|(i, note)| {
 
-                let style = if Some(i) == self.notes.state.selected() {
+                let style = if Some(i) == selected_item {
                     Style::default().fg(Color::Blue).bg(Color::White)
                 } else {
                     Style::default()
@@ -142,10 +157,10 @@ impl App {
             })
             .collect();
 
-        let mut selected_index = self.notes.state.selected().unwrap_or(0);
+        let mut selected_index = selected_item.unwrap_or(0);
         let len = list_items.len();
 
-        if let Some(mut selected_index) = self.notes.state.selected() {
+        if let Some(mut selected_index) = selected_item {
             let len = list_items.len();
 
             if selected_index >= len {
