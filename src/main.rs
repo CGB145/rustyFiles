@@ -145,22 +145,18 @@ impl App {
         let mut selected_index = self.notes.state.selected().unwrap_or(0);
         let len = list_items.len();
 
-        // If selected index is out of bounds or at the end, reset to 0
         if let Some(mut selected_index) = self.notes.state.selected() {
             let len = list_items.len();
 
-            // If selected index is at or beyond the end, reset to 0
             if selected_index >= len {
                 selected_index = 0;
-                self.notes.state.select(Some(0)); // ✅ update actual selection state
+                self.notes.state.select(Some(0));
             }
 
-            // Remove all items before the selected index
             if selected_index > 0 {
                 list_items.drain(0..selected_index);
             }
         } else {
-            // If there was no selection at all, default to 0
             self.notes.state.select(Some(0));
         }
 
