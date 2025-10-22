@@ -1,3 +1,4 @@
+use chrono::DateTime;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::*;
 use ratatui::buffer::Buffer;
@@ -16,7 +17,9 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::exit;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
+
 
 fn main() -> io::Result<()> {
     let mut terminal = init();
@@ -118,27 +121,6 @@ impl App {
     }
 
     fn handle_key_events(&mut self, key_event: KeyEvent) {
-        let file_data = fs::metadata(
-            self.notes
-                .items
-                .get(self.notes.state.selected().unwrap())
-                .unwrap()
-                .as_str(),
-        );
-        let file_data = match file_data {
-            Ok(metadata) => {
-                format!(
-                    "{} {} {:?} {} {:?}",
-                    metadata.is_file(),
-                    metadata.is_dir(),
-                    metadata.created(),
-                    metadata.len(),
-                    metadata.file_type()
-                )
-            }
-            Err(err) => format!("{:?}", err),
-        };
-
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Up => self.previous(),
@@ -155,7 +137,7 @@ impl App {
             ),
             KeyCode::PageUp => self.notes.dir_next(),
             KeyCode::PageDown => self.notes.dir_back(),
-            KeyCode::Enter => self.input.push('\n'),
+            KeyCode::Enter => self.open_via_app(),
             KeyCode::Backspace => {
                 self.input.pop();
             }
@@ -177,6 +159,24 @@ impl App {
         self.notes.state.select_previous();
     }
 
+    fn open_via_app(&mut self) {
+        let mut selection = String::from("xdg-open ");
+        selection.push_str(
+            &self
+                .notes
+                .items
+                .get(self.notes.state.selected().unwrap())
+                .unwrap()
+                .to_string(),
+        );
+
+        let output = Command::new("bash")
+            .arg("-c")
+            .arg(selection)
+            .status()
+            .expect("failed to execute process");
+    }
+
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
         let selected_item = self.notes.state.selected();
         let item_info = selected_item.map(|i| i.to_string()).unwrap_or_default();
@@ -185,11 +185,13 @@ impl App {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .title(Line::from(vec![
-                Span::from("↑ select ↓"),
+                Span::from("↑ select ↓").blue(),
                 Span::raw("   "),
-                Span::from("PageUp: Select Dir"),
+                Span::from("PageUp: Select Dir").blue(),
                 Span::raw("   "),
-                Span::from("PageDown: Back Dir"),
+                Span::from("PageDown: Back Dir").blue(),
+                Span::raw("   "),
+                Span::from("Enter: Open").blue(),
             ]))
             .title_bottom(Line::from(item_info).centered());
 
@@ -230,12 +232,79 @@ impl App {
         list.render(area, buf);
     }
 
-    fn render_editor(&mut self, area: Rect, buf: &mut Buffer) {
-        let text = Text::raw(self.input.as_str());
+    fn render_file_preview(&mut self, area: Rect, buf: &mut Buffer) {
+        let entry_name =                         self.notes.items
+            .get(self.notes.state.selected().unwrap())
+            .unwrap()
+            .split("/")
+            .last()
+            .expect("None")
+            .to_string();
+
+        let preview =
+            Block::default()
+                .title(
+                    Line::from("Preview").left_aligned()
+                )
+                .title(
+                    Line::from(entry_name).centered()
+                )
+                .borders(Borders::ALL);
+
+        preview.render(area, buf);
+    }
+
+    fn render_file_info(&mut self, area: Rect, buf: &mut Buffer) {
+        let entry_name =                         self.notes.items
+            .get(self.notes.state.selected().unwrap())
+            .unwrap()
+            .split("/")
+            .last()
+            .expect("None")
+            .to_string();
+
+        let mut text = Text::raw(self.input.as_str());
+        if Some(self.notes.state.selected()).is_some() {
+            let file_data = fs::metadata(
+                self.notes
+                    .items
+                    .get(self.notes.state.selected().unwrap())
+                    .unwrap()
+                    .as_str(),
+            );
+            let file_data = match file_data {
+                Ok(metadata) => {
+                    format!(
+                        "Is File: {}\nIs Folder: {}\nCreated: {}\nModified: {} \n",
+                        metadata.is_file(),
+                        metadata.is_dir(),
+                        metadata.created().ok().
+                            and_then(|t| {
+                            let d = t.duration_since(UNIX_EPOCH).ok()?;
+                            DateTime::from_timestamp(d.as_secs() as i64, d.subsec_nanos())
+
+                        })
+                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                        .unwrap_or_else(|| "Unavailable".to_string()),
+                        metadata.modified().ok().
+                            and_then(|t| {
+                                let d = t.duration_since(UNIX_EPOCH).ok()?;
+                                DateTime::from_timestamp(d.as_secs() as i64, d.subsec_nanos())
+
+                            })
+                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                            .unwrap_or_else(|| "Unavailable".to_string()),
+                    )
+                }
+                Err(err) => format!("{:?}", err),
+            };
+
+            text = Text::raw(file_data);
+        }
         let editor: Paragraph = Paragraph::new(text).block(
             Block::default()
-                .title(Line::from("q to quit").left_aligned())
-                .title(Line::from("Middle Title").centered())
+                .title(Line::from("q to quit").left_aligned().red())
+                .title(Line::from(entry_name).centered())
                 .title(Line::from("Right Title").right_aligned())
                 .borders(Borders::ALL),
         );
@@ -251,7 +320,16 @@ impl Widget for &mut App {
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
             .split(area);
 
+        let sub_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .split(layout[1]);
+
         self.render_list(layout[0], buf);
-        self.render_editor(layout[1], buf);
+        self.render_file_preview(sub_layout[0], buf);
+        self.render_file_info(sub_layout[1], buf);
     }
 }
+
+// crashes when folder is empty
+// crashes when there is no sufficient permission to open

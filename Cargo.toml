@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 ratatui = "0.30.0-alpha.5"
 crossterm = "0.29.0"
+chrono = "0.4.42"
