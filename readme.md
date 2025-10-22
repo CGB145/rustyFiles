@@ -1,6 +1,6 @@
-# rustyNotes
+# rustyFile
 
-`rustyNotes` is a small Rust project I started for experimenting with note-taking ideas.  
+`rustyNotes` is a small Rust project I started for experimenting.  
 It's very early, incomplete, and nothing serious—just a fun project.
 
 ## Status
