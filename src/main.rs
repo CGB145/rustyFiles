@@ -79,9 +79,20 @@ impl FileList{
         }
     }
 
+    fn dir_next(self: &mut Self){
+
+
+        self.path = PathBuf::from(self.items.get(self.state.selected().unwrap()).unwrap().as_str());
+        if self.path.is_dir() {
+            FileList::update(self);
+        }
+    }
+
     fn dir_back(self: &mut Self){
-        self.path.pop();
-        self.update();
+        if self.path.is_dir() {
+            self.path.pop();
+            self.update();
+        }
     }
 }
 
@@ -130,7 +141,7 @@ impl App {
             // KeyCode::PageUp => self.input.push_str(self.notes.items.join(" ").as_str()),
             KeyCode::PageUp => self.input.push_str(self.notes.path.to_str().unwrap()),
             KeyCode::PageDown => self.input.push_str(self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str()),
-            KeyCode::End => self.enter(),
+            KeyCode::End => self.notes.dir_next(),
             KeyCode::Char('b') => self.notes.dir_back(),
             KeyCode::Enter => self.input.push('\n'),
             KeyCode::Backspace => {
@@ -154,10 +165,6 @@ impl App {
         self.notes.state.select_previous();
     }
 
-    fn enter(&mut self){
-        self.notes.path = PathBuf::from(self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str());
-        FileList::update(&mut self.notes);
-    }
 
 
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
