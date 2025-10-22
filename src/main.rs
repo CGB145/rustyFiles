@@ -1,8 +1,10 @@
 use ratatui::*;
 use crossterm::*;
 use std::{fs, io};
+use std::fmt::format;
 use std::process::Command;
 use std::fs::File;
+use std::path::PathBuf;
 use std::process::exit;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::buffer::Buffer;
@@ -59,11 +61,27 @@ impl Default for FileList {
                 notes.push(entry.path().to_string_lossy().to_string());
         }
 
+
         Self {
             path,
             items: notes,
             state: ListState::default(),
         }
+    }
+}
+
+impl FileList{
+    fn update(self: &mut Self){
+        self.items.clear();
+        for entry in fs::read_dir(&self.path).unwrap() {
+            let entry = entry.unwrap();
+            self.items.push(entry.path().to_string_lossy().to_string());
+        }
+    }
+
+    fn dir_back(self: &mut Self){
+        self.path.pop();
+        self.update();
     }
 }
 
@@ -91,6 +109,19 @@ impl App {
     }
 
     fn handle_key_events(&mut self, key_event: KeyEvent){
+        let file_data = fs::metadata(self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str());
+        let file_data = match file_data {
+            Ok(metadata) => {
+                format!("{} {} {:?} {} {:?}",
+                        metadata.is_file(),
+                        metadata.is_dir(),
+                        metadata.created(),
+                metadata.len(),
+                metadata.file_type())
+            }
+            Err(err) => format!("{:?}", err)
+        };
+
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Up => self.previous(),
@@ -99,13 +130,8 @@ impl App {
             // KeyCode::PageUp => self.input.push_str(self.notes.items.join(" ").as_str()),
             KeyCode::PageUp => self.input.push_str(self.notes.path.to_str().unwrap()),
             KeyCode::PageDown => self.input.push_str(self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str()),
-            KeyCode::End => {
-                Command::new("bash")
-                    .arg("-c")
-                    .arg("cd ../")
-                    .output()
-                    .expect("Failed to execute command");
-            }
+            KeyCode::End => self.enter(),
+            KeyCode::Char('b') => self.notes.dir_back(),
             KeyCode::Enter => self.input.push('\n'),
             KeyCode::Backspace => {
                 self.input.pop();
@@ -126,6 +152,11 @@ impl App {
             self.notes.state.select(Some(self.notes.items.len()));
         }
         self.notes.state.select_previous();
+    }
+
+    fn enter(&mut self){
+        self.notes.path = PathBuf::from(self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str());
+        FileList::update(&mut self.notes);
     }
 
 
@@ -202,8 +233,8 @@ impl Widget for &mut App {
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(20),
-                Constraint::Percentage(80)
+                Constraint::Percentage(60),
+                Constraint::Percentage(40)
             ])
             .split(area);
 
