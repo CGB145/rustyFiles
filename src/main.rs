@@ -39,6 +39,8 @@ pub struct FileList {
     path: std::path::PathBuf,
     items: Vec<String>,
     state: ListState,
+    is_file: bool,
+    is_dir: bool,
 }
 
 impl Default for App {
@@ -66,6 +68,8 @@ impl Default for FileList {
             path,
             items: notes,
             state: ListState::default(),
+            is_file: false,
+            is_dir: false,
         }
     }
 }
@@ -73,19 +77,25 @@ impl Default for FileList {
 impl FileList {
     fn update(self: &mut Self) {
         self.items.clear();
-        for entry in fs::read_dir(&self.path).unwrap() {
-            let entry = entry.unwrap();
+
+        let entries = match fs::read_dir(&self.path){
+            Ok(entries) => entries,
+            Err(_) => return,
+        };
+
+        for entry in entries.filter_map(Result::ok) {
             self.items.push(entry.path().to_string_lossy().to_string());
         }
     }
 
     fn dir_next(self: &mut Self) {
-        self.path = PathBuf::from(
-            self.items
-                .get(self.state.selected().unwrap())
-                .unwrap()
-                .as_str(),
-        );
+
+        if let Some(index) = self.state.selected() {
+            if let Some(entry) = self.items.get(index) {
+                self.path = PathBuf::from(entry.as_str());
+            }
+        }
+
         if self.path.is_dir() {
             FileList::update(self);
         }
@@ -210,8 +220,6 @@ impl App {
             })
             .collect();
 
-        let mut selected_index = selected_item.unwrap_or(0);
-        let len = list_items.len();
 
         if let Some(mut selected_index) = selected_item {
             let len = list_items.len();
@@ -233,15 +241,41 @@ impl App {
     }
 
     fn render_file_preview(&mut self, area: Rect, buf: &mut Buffer) {
-        let entry_name =                         self.notes.items
+
+
+        let mut entry_name = String::new();
+
+        if let Some(selected) = self.notes.state.selected() {
+            if let Some(item) = self.notes.items.get(selected) {
+                entry_name = item
+                    .split('/')
+                    .last()
+                    .unwrap_or("None")
+                    .to_string();
+                // use entry_name here
+            }
+        }
+
+        let mut text = String::new();
+
+        let path = self.notes
+            .items
             .get(self.notes.state.selected().unwrap())
             .unwrap()
-            .split("/")
-            .last()
-            .expect("None")
-            .to_string();
+            .as_str();
 
-        let preview =
+        if self.notes.is_file && !self.notes.is_dir{
+            let file_content = match fs::read_to_string(&path) {
+                Ok(content) => content,
+                _ => String::from(&path.to_string()),
+            };
+
+            text.push_str(&file_content);
+        }else{
+            text.push_str(&path);
+        }
+
+        let preview = Paragraph::new(text).block(
             Block::default()
                 .title(
                     Line::from("Preview").left_aligned()
@@ -249,58 +283,77 @@ impl App {
                 .title(
                     Line::from(entry_name).centered()
                 )
-                .borders(Borders::ALL);
+                .borders(Borders::ALL)
+        );
+
+
+
 
         preview.render(area, buf);
     }
 
     fn render_file_info(&mut self, area: Rect, buf: &mut Buffer) {
-        let entry_name =                         self.notes.items
-            .get(self.notes.state.selected().unwrap())
-            .unwrap()
-            .split("/")
-            .last()
-            .expect("None")
-            .to_string();
+        let mut entry_name = String::new();
+
+        if let Some(selected) = self.notes.state.selected() {
+            if let Some(item) = self.notes.items.get(selected) {
+                entry_name = item
+                    .split('/')
+                    .last()
+                    .unwrap_or("None")
+                    .to_string();
+                // use entry_name here
+            }
+        }
+
 
         let mut text = Text::raw(self.input.as_str());
+        let mut file_data = String::new();
         if Some(self.notes.state.selected()).is_some() {
-            let file_data = fs::metadata(
-                self.notes
-                    .items
-                    .get(self.notes.state.selected().unwrap())
-                    .unwrap()
-                    .as_str(),
-            );
-            let file_data = match file_data {
-                Ok(metadata) => {
-                    format!(
-                        "Is File: {}\nIs Folder: {}\nCreated: {}\nModified: {} \n",
-                        metadata.is_file(),
-                        metadata.is_dir(),
-                        metadata.created().ok().
-                            and_then(|t| {
-                            let d = t.duration_since(UNIX_EPOCH).ok()?;
-                            DateTime::from_timestamp(d.as_secs() as i64, d.subsec_nanos())
+            if let Some(index) = self.notes.state.selected() {
+                if let Some(path) = self.notes.items.get(index) {
+                    match fs::metadata(path) {
 
-                        })
-                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                        .unwrap_or_else(|| "Unavailable".to_string()),
-                        metadata.modified().ok().
-                            and_then(|t| {
-                                let d = t.duration_since(UNIX_EPOCH).ok()?;
-                                DateTime::from_timestamp(d.as_secs() as i64, d.subsec_nanos())
+                        Ok(metadata) => {
+                            self.notes.is_file = metadata.is_file();
+                            self.notes.is_dir = metadata.is_dir();
+                           file_data = format!(
+                                "Is File: {}\nIs Folder: {}\nCreated: {}\nModified: {} \n",
+                                metadata.is_file(),
+                                metadata.is_dir(),
+                                metadata.created().ok().
+                                    and_then(|t| {
+                                        let d = t.duration_since(UNIX_EPOCH).ok()?;
+                                        DateTime::from_timestamp(d.as_secs() as i64, d.subsec_nanos())
 
-                            })
-                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
-                            .unwrap_or_else(|| "Unavailable".to_string()),
-                    )
+                                    })
+                                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                    .unwrap_or_else(|| "Unavailable".to_string()),
+                                metadata.modified().ok().
+                                    and_then(|t| {
+                                        let d = t.duration_since(UNIX_EPOCH).ok()?;
+                                        DateTime::from_timestamp(d.as_secs() as i64, d.subsec_nanos())
+
+                                    })
+                                    .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                                    .unwrap_or_else(|| "Unavailable".to_string()),
+                           );
+
+
+                        }
+                        _ => {}
+                    }
+                }else {
+                    file_data = "No Permission for this Folder, PageDown to return".to_string();
                 }
-                Err(err) => format!("{:?}", err),
-            };
+            }else {
+                file_data = "No Permission for this Folder, PageDown to return".to_string();
+            }
 
-            text = Text::raw(file_data);
+
+           text = Text::raw(file_data);
         }
+
         let editor: Paragraph = Paragraph::new(text).block(
             Block::default()
                 .title(Line::from("q to quit").left_aligned().red())
@@ -326,8 +379,9 @@ impl Widget for &mut App {
         .split(layout[1]);
 
         self.render_list(layout[0], buf);
-        self.render_file_preview(sub_layout[0], buf);
         self.render_file_info(sub_layout[1], buf);
+        self.render_file_preview(sub_layout[0], buf);
+
     }
 }
 
