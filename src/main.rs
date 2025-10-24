@@ -38,6 +38,7 @@ pub struct App {
 pub struct FileList {
     path: std::path::PathBuf,
     items: Vec<String>,
+    selected_items: Vec<String>,
     state: ListState,
     is_file: bool,
     is_dir: bool,
@@ -68,6 +69,7 @@ impl Default for FileList {
             path,
             items: notes,
             state: ListState::default(),
+            selected_items: Vec::new(),
             is_file: false,
             is_dir: false,
         }
@@ -148,6 +150,7 @@ impl App {
             KeyCode::PageUp => self.notes.dir_next(),
             KeyCode::PageDown => self.notes.dir_back(),
             KeyCode::Enter => self.open_via_app(),
+            KeyCode::Char(' ') => self.select_files(),
             KeyCode::Backspace => {
                 self.input.pop();
             }
@@ -187,6 +190,31 @@ impl App {
             .expect("failed to execute process");
     }
 
+    fn select_files(self: &mut Self) {
+        //ToDo
+        let mut selection = &mut self.notes.selected_items;
+        let selected_file = self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str().to_string();
+
+        if selection.contains(&selected_file) {
+            selection.retain(|item| item != &selected_file);
+        }else{
+            selection.push(selected_file);
+        }
+
+    }
+
+    fn move_files(self: &mut Self) {
+        //ToDo
+    }
+
+    fn copy_files(self: &mut Self) {
+        //ToDo
+    }
+
+    fn delete_files(self: &mut Self) {
+        //ToDo
+    }
+
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
         let selected_item = self.notes.state.selected();
         let item_info = selected_item.map(|i| i.to_string()).unwrap_or_default();
@@ -194,7 +222,7 @@ impl App {
         let block = Block::new()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .title(Line::from(vec![
+            .title_bottom(Line::from(vec![
                 Span::from("↑ select ↓").blue(),
                 Span::raw("   "),
                 Span::from("PageUp: Select Dir").blue(),
@@ -202,8 +230,10 @@ impl App {
                 Span::from("PageDown: Back Dir").blue(),
                 Span::raw("   "),
                 Span::from("Enter: Open").blue(),
+                Span::raw("   "),
+                Span::from("Spacebar: Select").blue(),
             ]))
-            .title_bottom(Line::from(item_info).centered());
+            .title(Line::from("q: Quit").red().bold());
 
         let mut list_items: Vec<ListItem> = self
             .notes
@@ -356,13 +386,24 @@ impl App {
 
         let editor: Paragraph = Paragraph::new(text).block(
             Block::default()
-                .title(Line::from("q to quit").left_aligned().red())
                 .title(Line::from(entry_name).centered())
-                .title(Line::from("Right Title").right_aligned())
                 .borders(Borders::ALL),
         );
 
         editor.render(area, buf);
+    }
+
+    fn render_debug(&mut self, area: Rect, buf: &mut Buffer) {
+        let mut text = self.notes.selected_items.join(", ");
+        let mut test = String::from(text);
+
+        let debug = Paragraph::new(test).block(
+            Block::default()
+            .title(Line::from("Debug").centered())
+            .borders(Borders::ALL),
+        );
+
+        debug.render(area, buf);
     }
 }
 
@@ -378,9 +419,15 @@ impl Widget for &mut App {
         .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
         .split(layout[1]);
 
-        self.render_list(layout[0], buf);
+        let second_sub_layout = Layout::default()
+        .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+            .split(layout[0]);
+
+        self.render_list(second_sub_layout[0], buf);
         self.render_file_info(sub_layout[1], buf);
         self.render_file_preview(sub_layout[0], buf);
+        self.render_debug(second_sub_layout[1], buf);
 
     }
 }
