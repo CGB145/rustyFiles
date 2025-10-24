@@ -431,6 +431,3 @@ impl Widget for &mut App {
 
     }
 }
-
-// crashes when folder is empty
-// crashes when there is no sufficient permission to open
