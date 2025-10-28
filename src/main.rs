@@ -1,25 +1,19 @@
 use chrono::DateTime;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::*;
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::palette::material::{BLUE, GREEN};
-use ratatui::style::palette::tailwind::SLATE;
-use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
-    Block, BorderType, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
+    Block, BorderType, Borders, List, ListItem, ListState, Paragraph,
     Widget, Wrap,
 };
 use ratatui::*;
-use std::fmt::format;
-use std::fs::File;
 use std::path::PathBuf;
 use std::process::Command;
-use std::process::exit;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{UNIX_EPOCH};
 use std::{fs, io};
-use std::arch::naked_asm;
 
 fn main() -> io::Result<()> {
     let mut terminal = init();
@@ -45,7 +39,6 @@ pub struct FileList {
     is_file: bool,
     is_dir: bool,
     is_active: bool,
-    scroll: Scroll
 }
 
 pub struct SelectedWidget{
@@ -106,7 +99,6 @@ impl Default for FileList {
             is_file: false,
             is_dir: false,
             is_active: true,
-            scroll: Scroll::default()
         }
     }
 }
@@ -351,7 +343,6 @@ impl App {
     }
 
     fn select_files(self: &mut Self) {
-        //ToDo
         let selection = &mut self.notes.selected_items;
         let selected_file = self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str().to_string();
 
@@ -537,7 +528,7 @@ impl App {
 
     fn render_file_info(&mut self, area: Rect, buf: &mut Buffer) {
 
-        let entry_name = self.notes.selected_item();
+        //let entry_name = self.notes.selected_item();
 
 
         let mut text = Text::raw(self.input.as_str());
