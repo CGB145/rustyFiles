@@ -6,14 +6,15 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
-    Block, BorderType, Borders, List, ListItem, ListState, Paragraph,
-    Widget, Wrap,
+    Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Widget, Wrap,
 };
 use ratatui::*;
+use std::fmt::format;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
 use std::{fs, io};
+use natord::compare;
 
 fn main() -> io::Result<()> {
     let mut terminal = init();
@@ -41,29 +42,29 @@ pub struct FileList {
     is_active: bool,
 }
 
-pub struct SelectedWidget{
+pub struct SelectedWidget {
     file_info: FileInfo,
     file_preview: FilePreview,
     file_list: FileList,
     file_selection: FileSelection,
 }
 
-pub struct FilePreview{
+pub struct FilePreview {
     is_active: bool,
     scroll: Scroll,
 }
 
-pub struct FileInfo{
+pub struct FileInfo {
     is_active: bool,
     scroll: Scroll,
 }
 
-pub struct FileSelection{
+pub struct FileSelection {
     is_active: bool,
     scroll: Scroll,
 }
 
-pub struct Scroll{
+pub struct Scroll {
     y: u16,
     x: u16,
 }
@@ -105,19 +106,19 @@ impl Default for FileList {
 
 impl Default for SelectedWidget {
     fn default() -> Self {
-        Self{
+        Self {
             file_info: FileInfo::default(),
             file_preview: FilePreview::default(),
             file_list: FileList::default(),
-            file_selection: FileSelection::default()
+            file_selection: FileSelection::default(),
         }
     }
 }
 
 impl Default for FilePreview {
     fn default() -> Self {
-        Self{
-            is_active:false,
+        Self {
+            is_active: false,
             scroll: Scroll::default(),
         }
     }
@@ -125,8 +126,8 @@ impl Default for FilePreview {
 
 impl Default for FileInfo {
     fn default() -> Self {
-        Self{
-            is_active:false,
+        Self {
+            is_active: false,
             scroll: Scroll::default(),
         }
     }
@@ -134,20 +135,16 @@ impl Default for FileInfo {
 
 impl Default for FileSelection {
     fn default() -> Self {
-        Self{
+        Self {
             is_active: false,
             scroll: Scroll::default(),
         }
     }
 }
 
-
-impl Default for Scroll{
+impl Default for Scroll {
     fn default() -> Self {
-        Self{
-            y: 0,
-            x: 0,
-        }
+        Self { y: 0, x: 0 }
     }
 }
 
@@ -155,18 +152,20 @@ impl FileList {
     fn update(self: &mut Self) {
         self.items.clear();
 
-        let entries = match fs::read_dir(&self.path){
+        let entries = match fs::read_dir(&self.path) {
             Ok(entries) => entries,
             Err(_) => return,
         };
+        
+        let mut items: Vec<String> = entries.filter_map(Result::ok)
+        .map(|entry| entry.path().to_string_lossy().to_string())
+        .collect();
 
-        for entry in entries.filter_map(Result::ok) {
-            self.items.push(entry.path().to_string_lossy().to_string());
-        }
+        items.sort_by(|a, b| compare(a, b));
+        self.items = items;
     }
 
     fn dir_next(self: &mut Self) {
-
         if let Some(index) = self.state.selected() {
             if let Some(entry) = self.items.get(index) {
                 self.path = PathBuf::from(entry.as_str());
@@ -175,12 +174,14 @@ impl FileList {
 
         if self.path.is_dir() {
             FileList::update(self);
+            self.state.select(Some(0));
         }
     }
 
     fn dir_back(self: &mut Self) {
         self.path.pop();
         self.update();
+        self.state.select(Some(0));
     }
 
     fn selected_item(self: &mut Self) -> String {
@@ -188,11 +189,7 @@ impl FileList {
 
         if let Some(selected) = self.state.selected() {
             if let Some(item) = self.items.get(selected) {
-                entry_name = item
-                    .split('/')
-                    .last()
-                    .unwrap_or("None")
-                    .to_string();
+                entry_name = item.split('/').last().unwrap_or("None").to_string();
                 // use entry_name here
             }
         }
@@ -200,18 +197,18 @@ impl FileList {
     }
 }
 
-impl SelectedWidget{
+impl SelectedWidget {
     fn change_widget(self: &mut Self) {
-        if self.file_list.is_active{
+        if self.file_list.is_active {
             self.file_list.is_active = false;
             self.file_preview.is_active = true;
-        }else if self.file_preview.is_active {
+        } else if self.file_preview.is_active {
             self.file_preview.is_active = false;
             self.file_info.is_active = true;
-        }else if self.file_info.is_active {
+        } else if self.file_info.is_active {
             self.file_info.is_active = false;
             self.file_selection.is_active = true;
-        }else if self.file_selection.is_active {
+        } else if self.file_selection.is_active {
             self.file_selection.is_active = false;
             self.file_list.is_active = true;
         }
@@ -288,11 +285,17 @@ impl App {
             };
 
             self.notes.state.select(Some(i));
-        } else if self.selected_widget.file_preview.is_active && self.selected_widget.file_preview.scroll.y > 0 {
+        } else if self.selected_widget.file_preview.is_active
+            && self.selected_widget.file_preview.scroll.y > 0
+        {
             self.selected_widget.file_preview.scroll.y -= 1;
-        } else if self.selected_widget.file_info.is_active && self.selected_widget.file_info.scroll.y > 0 {
+        } else if self.selected_widget.file_info.is_active
+            && self.selected_widget.file_info.scroll.y > 0
+        {
             self.selected_widget.file_info.scroll.y -= 1;
-        } else if self.selected_widget.file_selection.is_active && self.selected_widget.file_selection.scroll.y > 0 {
+        } else if self.selected_widget.file_selection.is_active
+            && self.selected_widget.file_selection.scroll.y > 0
+        {
             self.selected_widget.file_selection.scroll.y -= 1;
         }
     }
@@ -339,19 +342,23 @@ impl App {
         let status = output.status;
         let stderr = String::from_utf8_lossy(&output.stderr);
         self.error_output.push(format!("{}, {}", status, stderr));
-
     }
 
     fn select_files(self: &mut Self) {
         let selection = &mut self.notes.selected_items;
-        let selected_file = self.notes.items.get(self.notes.state.selected().unwrap()).unwrap().as_str().to_string();
+        let selected_file = self
+            .notes
+            .items
+            .get(self.notes.state.selected().unwrap())
+            .unwrap()
+            .as_str()
+            .to_string();
 
         if selection.contains(&selected_file) {
             selection.retain(|item| item != &selected_file);
-        }else{
+        } else {
             selection.push(selected_file);
         }
-
     }
 
     fn move_files(self: &mut Self) {
@@ -405,7 +412,6 @@ impl App {
             let status = output.status;
             let stderr = String::from_utf8_lossy(&output.stderr);
             self.error_output.push(format!("{}, {}", status, stderr));
-
         }
 
         self.notes.update();
@@ -415,9 +421,9 @@ impl App {
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
         let selected_item = self.notes.state.selected();
 
-        let border_color = if self.selected_widget.file_list.is_active{
+        let border_color = if self.selected_widget.file_list.is_active {
             Style::default().fg(Color::Blue)
-        }else {
+        } else {
             Style::default().fg(Color::DarkGray)
         };
 
@@ -435,9 +441,10 @@ impl App {
                 Span::styled("d Delete  ", Style::default().fg(Color::DarkGray)),
                 Span::styled("q Quit", Style::default().fg(Color::Red)),
             ]))
-            .title(Line::from(
-                Span::styled("📁 File Browser", Style::default().fg(Color::Cyan).bold())
-            ));
+            .title(Line::from(Span::styled(
+                "📁 File Browser",
+                Style::default().fg(Color::Cyan).bold(),
+            )));
 
         let mut list_items: Vec<ListItem> = self
             .notes
@@ -454,17 +461,39 @@ impl App {
             })
             .collect();
 
-        //ToDo better file view when scrolling
-        if let Some(mut selected_index) = selected_item {
+
+        /*
+            if i had no area...
+
+        let size = crossterm::terminal::size();
+
+
+        let rows: usize;
+        if let Ok(size) = size {
+            rows = (size.1 as f32 * 0.8) as usize;
+        } else {
+            rows = 0;
+            self.error_output.push(format!("Couldnt get cols"));
+        } */
+
+        let rows = area.height as usize;
+        let rows = rows.saturating_sub(2);
+
+        if let Some(selected_index) = selected_item {
             let len = list_items.len();
 
             if selected_index >= len {
-                selected_index = 0;
                 self.notes.state.select(Some(0));
             }
 
-            if selected_index > 0 {
-                list_items.drain(0..selected_index);
+            let x = ((len) as f32 / (rows) as f32).ceil() as i32;
+            let multiples: Vec<i32> = (1..x).map(|i| rows as i32 * i).collect();
+
+            for value in multiples {
+                if selected_index >= value as usize {
+                    list_items.drain(0..rows as usize);
+                    self.error_output.push(value.to_string());
+                }
             }
         } else {
             self.notes.state.select(Some(0));
@@ -475,37 +504,34 @@ impl App {
     }
 
     fn render_file_preview(&mut self, area: Rect, buf: &mut Buffer) {
-
-
         let entry_name = self.notes.selected_item();
 
         let mut text = String::new();
 
         let mut path = "";
 
-        if let Some(index) = self.notes.state.selected(){
-            if let Some(item) = self.notes.items.get(index){
+        if let Some(index) = self.notes.state.selected() {
+            if let Some(item) = self.notes.items.get(index) {
                 path = item.as_str();
             }
         }
 
+        /*
+        this would panic
+        let path = self.notes
+        .items
+        .get(self.notes.state.selected().unwrap())
+        .unwrap()
+        .as_str(); */
 
-/*      
-            this would panic
-            let path = self.notes
-            .items
-            .get(self.notes.state.selected().unwrap())
-            .unwrap()
-            .as_str(); */
-
-        if self.notes.is_file && !self.notes.is_dir{
+        if self.notes.is_file && !self.notes.is_dir {
             let file_content = match fs::read_to_string(&path) {
                 Ok(content) => content,
                 _ => String::from(&path.to_string()),
             };
 
             text.push_str(&file_content);
-        }else{
+        } else {
             text.push_str(&path);
         }
 
@@ -515,31 +541,29 @@ impl App {
             Style::default().fg(Color::DarkGray)
         };
 
-        let scroll = (self.selected_widget.file_preview.scroll.y, self.selected_widget.file_preview.scroll.x);
-
-
-        let preview = Paragraph::new(text).wrap(Wrap{trim: true}).scroll((scroll)).block(
-            Block::default()
-                .title(
-                    Line::from(vec![
-                        Span::styled("🖹 Preview: ", Style::default().fg(Color::Cyan).bold()),
-                        Span::raw(entry_name),
-                    ])
-                )
-                .borders(Borders::ALL)
-                .border_style(border_color)
+        let scroll = (
+            self.selected_widget.file_preview.scroll.y,
+            self.selected_widget.file_preview.scroll.x,
         );
 
-
-
+        let preview = Paragraph::new(text)
+            .wrap(Wrap { trim: true })
+            .scroll((scroll))
+            .block(
+                Block::default()
+                    .title(Line::from(vec![
+                        Span::styled("🖹 Preview: ", Style::default().fg(Color::Cyan).bold()),
+                        Span::raw(entry_name),
+                    ]))
+                    .borders(Borders::ALL)
+                    .border_style(border_color),
+            );
 
         preview.render(area, buf);
     }
 
     fn render_file_info(&mut self, area: Rect, buf: &mut Buffer) {
-
         //let entry_name = self.notes.selected_item();
-
 
         let mut text = Text::raw(self.input.as_str());
         let mut file_data = String::new();
@@ -547,45 +571,49 @@ impl App {
             if let Some(index) = self.notes.state.selected() {
                 if let Some(path) = self.notes.items.get(index) {
                     match fs::metadata(path) {
-
                         Ok(metadata) => {
                             self.notes.is_file = metadata.is_file();
                             self.notes.is_dir = metadata.is_dir();
-                           file_data = format!(
+                            file_data = format!(
                                 "Is File: {}\nIs Folder: {}\nCreated: {}\nModified: {} \n",
                                 metadata.is_file(),
                                 metadata.is_dir(),
-                                metadata.created().ok().
-                                    and_then(|t| {
+                                metadata
+                                    .created()
+                                    .ok()
+                                    .and_then(|t| {
                                         let d = t.duration_since(UNIX_EPOCH).ok()?;
-                                        DateTime::from_timestamp(d.as_secs() as i64, d.subsec_nanos())
-
+                                        DateTime::from_timestamp(
+                                            d.as_secs() as i64,
+                                            d.subsec_nanos(),
+                                        )
                                     })
                                     .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                                     .unwrap_or_else(|| "Unavailable".to_string()),
-                                metadata.modified().ok().
-                                    and_then(|t| {
+                                metadata
+                                    .modified()
+                                    .ok()
+                                    .and_then(|t| {
                                         let d = t.duration_since(UNIX_EPOCH).ok()?;
-                                        DateTime::from_timestamp(d.as_secs() as i64, d.subsec_nanos())
-
+                                        DateTime::from_timestamp(
+                                            d.as_secs() as i64,
+                                            d.subsec_nanos(),
+                                        )
                                     })
                                     .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
                                     .unwrap_or_else(|| "Unavailable".to_string()),
-                           );
-
-
+                            );
                         }
                         _ => {}
                     }
-                }else {
+                } else {
                     file_data = "No Permission for this Folder, PageDown to return".to_string();
                 }
-            }else {
+            } else {
                 file_data = "No Permission for this Folder, PageDown to return".to_string();
             }
 
-
-           text = Text::raw(file_data);
+            text = Text::raw(file_data);
         }
 
         let border_color = if self.selected_widget.file_info.is_active {
@@ -594,17 +622,23 @@ impl App {
             Style::default().fg(Color::DarkGray)
         };
 
-        let scroll = (self.selected_widget.file_info.scroll.y, self.selected_widget.file_info.scroll.x);
-
-        let editor: Paragraph = Paragraph::new(text).wrap(Wrap{trim:true}).scroll((scroll)).block(
-            Block::default()
-                .title(Line::from(
-                    Span::styled("ℹ File Info", Style::default().fg(Color::Cyan).bold())
-                ))
-                .borders(Borders::ALL)
-                .border_style(border_color),
+        let scroll = (
+            self.selected_widget.file_info.scroll.y,
+            self.selected_widget.file_info.scroll.x,
         );
 
+        let editor: Paragraph = Paragraph::new(text)
+            .wrap(Wrap { trim: true })
+            .scroll((scroll))
+            .block(
+                Block::default()
+                    .title(Line::from(Span::styled(
+                        "ℹ File Info",
+                        Style::default().fg(Color::Cyan).bold(),
+                    )))
+                    .borders(Borders::ALL)
+                    .border_style(border_color),
+            );
 
         editor.render(area, buf);
     }
@@ -612,16 +646,16 @@ impl App {
     fn render_selection(&mut self, area: Rect, buf: &mut Buffer) {
         let text = self.notes.selected_items.join(", ");
 
-        // let text = self.error_output.join(", ");
+        let text = self.error_output.join(", ");
         /*let text = vec![
-            self.selected_widget.file_list.is_active.to_string(),
-            self.selected_widget.file_preview.is_active.to_string(),
-            self.selected_widget.file_info.is_active.to_string(),
-        ];
-        let test = String::from(text.join("\n"));
+                    self.selected_widget.file_list.is_active.to_string(),
+                    self.selected_widget.file_preview.is_active.to_string(),
+                    self.selected_widget.file_info.is_active.to_string(),
+                ];
+                let test = String::from(text.join("\n"));
 
 
-*/
+        */
 
         let border_color = if self.selected_widget.file_selection.is_active {
             Style::default().fg(Color::Cyan)
@@ -629,16 +663,22 @@ impl App {
             Style::default().fg(Color::DarkGray)
         };
 
-        let scroll = (self.selected_widget.file_selection.scroll.y, self.selected_widget.file_selection.scroll.x);
+        let scroll = (
+            self.selected_widget.file_selection.scroll.y,
+            self.selected_widget.file_selection.scroll.x,
+        );
 
-        let selection = Paragraph::new(text).wrap(Wrap{trim: true}).block(
-            Block::default()
-                .title(Line::from(
-                    Span::styled("✅ Selected Files", Style::default().fg(Color::Cyan).bold())
-                ))
-            .borders(Borders::ALL)
-            .style(border_color)
-        )
+        let selection = Paragraph::new(text)
+            .wrap(Wrap { trim: true })
+            .block(
+                Block::default()
+                    .title(Line::from(Span::styled(
+                        "✅ Selected Files",
+                        Style::default().fg(Color::Cyan).bold(),
+                    )))
+                    .borders(Borders::ALL)
+                    .style(border_color),
+            )
             .scroll(scroll);
         selection.render(area, buf);
     }
@@ -652,12 +692,12 @@ impl Widget for &mut App {
             .split(area);
 
         let sub_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
-        .split(layout[1]);
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+            .split(layout[1]);
 
         let second_sub_layout = Layout::default()
-        .direction(Direction::Vertical)
+            .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
             .split(layout[0]);
 
@@ -665,6 +705,5 @@ impl Widget for &mut App {
         self.render_file_info(sub_layout[1], buf);
         self.render_file_preview(sub_layout[0], buf);
         self.render_selection(second_sub_layout[1], buf);
-
     }
 }
