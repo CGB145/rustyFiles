@@ -481,12 +481,22 @@ impl App {
 
         let mut text = String::new();
 
-        //Todo panics if no file in folder
-        let path = self.notes
+        let mut path = "";
+
+        if let Some(index) = self.notes.state.selected(){
+            if let Some(item) = self.notes.items.get(index){
+                path = item.as_str();
+            }
+        }
+
+
+/*      
+            this would panic
+            let path = self.notes
             .items
             .get(self.notes.state.selected().unwrap())
             .unwrap()
-            .as_str();
+            .as_str(); */
 
         if self.notes.is_file && !self.notes.is_dir{
             let file_content = match fs::read_to_string(&path) {
