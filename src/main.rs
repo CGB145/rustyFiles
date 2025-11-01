@@ -492,7 +492,6 @@ impl App {
             for value in multiples {
                 if selected_index >= value as usize {
                     list_items.drain(0..rows as usize);
-                    self.error_output.push(value.to_string());
                 }
             }
         } else {
@@ -646,7 +645,7 @@ impl App {
     fn render_selection(&mut self, area: Rect, buf: &mut Buffer) {
         let text = self.notes.selected_items.join(", ");
 
-        let text = self.error_output.join(", ");
+        //let text = self.error_output.join(", ");
         /*let text = vec![
                     self.selected_widget.file_list.is_active.to_string(),
                     self.selected_widget.file_preview.is_active.to_string(),
