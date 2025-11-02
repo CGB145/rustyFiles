@@ -1,20 +1,20 @@
 use chrono::DateTime;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::*;
+use natord::compare;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
     Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Widget, Wrap,
 };
 use ratatui::*;
 use std::fmt::format;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::UNIX_EPOCH;
 use std::{fs, io};
-use natord::compare;
 
 fn main() -> io::Result<()> {
     let mut terminal = init();
@@ -156,10 +156,11 @@ impl FileList {
             Ok(entries) => entries,
             Err(_) => return,
         };
-        
-        let mut items: Vec<String> = entries.filter_map(Result::ok)
-        .map(|entry| entry.path().to_string_lossy().to_string())
-        .collect();
+
+        let mut items: Vec<String> = entries
+            .filter_map(Result::ok)
+            .map(|entry| entry.path().to_string_lossy().to_string())
+            .collect();
 
         items.sort_by(|a, b| compare(a, b));
         self.items = items;
@@ -262,7 +263,7 @@ impl App {
             KeyCode::Char('c') => self.copy_files(),
             KeyCode::Char('d') => self.delete_files(),
             KeyCode::Backspace => {
-                self.input.pop();
+                self.notes.selected_items.clear();
             }
             _ => {}
         }
@@ -421,6 +422,18 @@ impl App {
     fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
         let selected_item = self.notes.state.selected();
 
+        let mut path = "";
+
+        if let Some(index) = self.notes.state.selected() {
+            if let Some(item) = self.notes.items.get(index) {
+                if let Some(pos) = item.rfind('/') {
+                    path = &item[..pos]; // take everything up to the last '/'
+                } else {
+                    path = item; // no '/' found, keep as is
+                }
+            }
+        }
+
         let border_color = if self.selected_widget.file_list.is_active {
             Style::default().fg(Color::Blue)
         } else {
@@ -432,19 +445,20 @@ impl App {
             .border_type(BorderType::Rounded)
             .border_style(border_color)
             .title_bottom(Line::from(vec![
-                Span::styled("↑↓ Navigate  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("⏎ Open  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("␣ Select  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("PgUp/PgDn Dir Nav  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("m Move  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("c Copy  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("d Delete  ", Style::default().fg(Color::DarkGray)),
-                Span::styled("q Quit", Style::default().fg(Color::Red)),
+                Span::styled("↑↓ Navigate  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("⏎ Open  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("␣ Select  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("PgUp/PgDn Dir Nav  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("m Move  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("c Copy  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("d Delete  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("q Quit", Style::default().fg(Color::Red)).bold(),
             ]))
             .title(Line::from(Span::styled(
                 "📁 File Browser",
                 Style::default().fg(Color::Cyan).bold(),
-            )));
+            )))
+            .title(path);
 
         let mut list_items: Vec<ListItem> = self
             .notes
@@ -457,10 +471,19 @@ impl App {
                 } else {
                     Style::default()
                 };
-                ListItem::new(note.clone()).style(style)
+                let mut x = note.split('/').last().unwrap_or("Error").to_string();
+                match fs::metadata(note){
+                    Ok(metadata) => {
+                        if metadata.is_dir(){
+                            x.push('/');
+                        }
+                    }
+                    _ =>{}
+                }
+                
+                ListItem::new(x).style(style)
             })
             .collect();
-
 
         /*
             if i had no area...
@@ -547,11 +570,11 @@ impl App {
 
         let preview = Paragraph::new(text)
             .wrap(Wrap { trim: true })
-            .scroll((scroll))
+            .scroll(scroll)
             .block(
                 Block::default()
                     .title(Line::from(vec![
-                        Span::styled("🖹 Preview: ", Style::default().fg(Color::Cyan).bold()),
+                        Span::styled("󰍉 Preview: ", Style::default().fg(Color::Cyan).bold()),
                         Span::raw(entry_name),
                     ]))
                     .borders(Borders::ALL)
@@ -569,14 +592,20 @@ impl App {
         if Some(self.notes.state.selected()).is_some() {
             if let Some(index) = self.notes.state.selected() {
                 if let Some(path) = self.notes.items.get(index) {
+                    let path_as_path = Path::new(path);
+                    let extension: String;
+                    match path_as_path.extension() {
+                        Some(ext) => {extension=ext.to_string_lossy().to_string()}
+                        None =>{extension=String::from("none")}
+                    }
                     match fs::metadata(path) {
                         Ok(metadata) => {
                             self.notes.is_file = metadata.is_file();
                             self.notes.is_dir = metadata.is_dir();
                             file_data = format!(
-                                "Is File: {}\nIs Folder: {}\nCreated: {}\nModified: {} \n",
-                                metadata.is_file(),
-                                metadata.is_dir(),
+                                "Extension:{:?}\nSize: {:.2} KiB\nCreated: {}\nModified: {}\n",
+                                extension,
+                                metadata.len() as f64 / 1024.0,
                                 metadata
                                     .created()
                                     .ok()
@@ -644,7 +673,7 @@ impl App {
 
     fn render_selection(&mut self, area: Rect, buf: &mut Buffer) {
         let text = self.notes.selected_items.join(", ");
-
+        //let text = self.notes.selected_item();
         //let text = self.error_output.join(", ");
         /*let text = vec![
                     self.selected_widget.file_list.is_active.to_string(),
@@ -675,10 +704,16 @@ impl App {
                         "✅ Selected Files",
                         Style::default().fg(Color::Cyan).bold(),
                     )))
+                    .title_bottom(Line::from(Span::styled(
+                        "󰭜 Clear Selected Files",
+                        Style::default().fg(Color::Cyan).bold(),
+                    )))
                     .borders(Borders::ALL)
                     .style(border_color),
             )
-            .scroll(scroll);
+            .scroll(scroll)
+            .style(Style::default().fg(Color::Cyan));
+
         selection.render(area, buf);
     }
 }
