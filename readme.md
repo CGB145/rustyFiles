@@ -19,6 +19,6 @@ New features or refinements might still be added over time.
 You can build and install `rustyFile` using Cargo:
 
 ```bash
-git clone https://github.com/yourusername/rustyFile.git
+git clone https://github.com/CGB145/rustyFile.git
 cd rustyFile
 cargo build --release
