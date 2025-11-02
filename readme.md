@@ -1,16 +1,24 @@
-# rustyFile
+# 🦀 rustyFile
 
-`rustyNotes` is a small Rust project I started for experimenting.  
-It's very early, incomplete, and nothing serious—just a fun project.
+![rustyFile Screenshot](./images/screenshot.png)
 
-## Status
+**rustyFile** is a small Rust project I built while learning Rust.  
+It’s a lightweight, barebones file explorer written in pure Rust.
 
-🚧 Early development — not ready for real use.
+---
 
-## Usage
+## 🚀 Status
 
-Currently, there’s nothing to install or run. This is just a playground project.
+✅ **Mostly complete** — stable and usable.  
+New features or refinements might still be added over time.
 
-## Contributing
+---
 
-Not expecting contributions yet — feel free to watch how it develops.
+## ⚙️ Installation
+
+You can build and install `rustyFile` using Cargo:
+
+```bash
+git clone https://github.com/yourusername/rustyFile.git
+cd rustyFile
+cargo build --release
