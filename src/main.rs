@@ -10,7 +10,6 @@ use ratatui::widgets::{
     Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Widget, Wrap,
 };
 use ratatui::*;
-use std::fmt::format;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::UNIX_EPOCH;
@@ -657,7 +656,7 @@ impl App {
 
         let editor: Paragraph = Paragraph::new(text)
             .wrap(Wrap { trim: true })
-            .scroll((scroll))
+            .scroll(scroll)
             .block(
                 Block::default()
                     .title(Line::from(Span::styled(
