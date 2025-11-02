@@ -284,6 +284,8 @@ impl App {
                 Some(i) => i - 1,
             };
 
+            self.selected_widget.file_preview.scroll = Scroll { y: (0), x: (0) };
+
             self.notes.state.select(Some(i));
         } else if self.selected_widget.file_preview.is_active
             && self.selected_widget.file_preview.scroll.y > 0
@@ -312,7 +314,7 @@ impl App {
                 Some(i) => i + 1,
                 None => 0, // nothing selected → start at 0
             };
-
+            self.selected_widget.file_preview.scroll = Scroll { y: (0), x: (0) };
             self.notes.state.select(Some(i));
         } else if self.selected_widget.file_preview.is_active {
             self.selected_widget.file_preview.scroll.y += 1;
@@ -566,6 +568,8 @@ impl App {
             self.selected_widget.file_preview.scroll.y,
             self.selected_widget.file_preview.scroll.x,
         );
+
+
 
         let preview = Paragraph::new(text)
             .wrap(Wrap { trim: true })
