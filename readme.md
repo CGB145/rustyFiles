@@ -1,4 +1,4 @@
-# 󰻀cb-ls
+# 🐧cb-ls
 
 ![cb-ls Screenshot](./images/screenshot.png)
 
