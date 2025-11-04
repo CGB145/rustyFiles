@@ -13,6 +13,7 @@ use ratatui::*;
 use std::fmt::Alignment;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
+use std::str::FromStr;
 use std::time::UNIX_EPOCH;
 use std::{fs, io};
 
@@ -201,8 +202,14 @@ impl FileList {
 
     fn dir_ls(self: &mut Self)-> String{
 
-            let output = Command::new("ls")
-                .arg(self.selected_item())
+        let path = self.items
+                    .get(self.state.selected().unwrap())
+                    .unwrap()
+                    .as_str().to_string();                      
+
+            let output = Command::new("bash")
+                .arg("-c") // Use bash with -c to execute a command
+                .arg(format!("ls {}", path))
                 .output()
                 .expect("failed to execute process");
 
@@ -277,6 +284,7 @@ impl App {
             KeyCode::Char('c') => self.copy_files(),
             KeyCode::Char('d') => self.delete_files(),
             KeyCode::Char('h') => self.help = !self.help,
+            KeyCode::Char('t') => self.error_output.push(self.notes.dir_ls()),
             KeyCode::Backspace => {
                 self.notes.selected_items.clear();
             }
@@ -565,7 +573,29 @@ impl App {
 
             text.push_str(&file_content);
         } else {
-            text.push_str(&self.notes.dir_ls());
+                    let dir_items = self.notes.dir_ls();
+                 let mut dir_items: Vec<String>  = dir_items
+            .split('\n')
+            .map(
+                |item|{
+
+                    let mut item = item.to_string();
+                    let mut path = self.notes.selected_item();
+                    path.push_str(format!("/{}",item).as_str());
+
+                    let path_buf = PathBuf::from(path.clone());
+
+                    if path_buf.is_dir(){
+                        item.push('/');
+                        item
+                    }else{
+                        item
+                    }
+   
+                })
+                .collect();
+            dir_items.pop();
+            text.push_str(format!("{}", dir_items.join("\n")).as_str());
         }
 
         let border_color = if self.selected_widget.file_preview.is_active {
@@ -685,10 +715,12 @@ impl App {
     }
 
     fn render_selection(&mut self, area: Rect, buf: &mut Buffer) {
-        //let text = self.notes.selected_items.join(", ");
+        let text = self.notes.selected_items.join(", ");
         //let text = self.notes.selected_item();
-        let text = self.error_output.join(", ");
-        //let text = self.notes.dir_ls();
+        //let text = self.error_output.join(", ");
+
+
+
         /*let text = vec![
                     self.selected_widget.file_list.is_active.to_string(),
                     self.selected_widget.file_preview.is_active.to_string(),
