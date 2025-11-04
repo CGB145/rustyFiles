@@ -1,5 +1,5 @@
 use chrono::DateTime;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::*;
 use natord::compare;
 use ratatui::buffer::Buffer;
@@ -7,7 +7,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
-    Block, BorderType, Borders, List, ListItem, ListState, Padding, Paragraph, Widget, Wrap
+    Block, BorderType, Borders, List, ListItem, ListState, Padding, Paragraph, Widget, Wrap,
 };
 use ratatui::*;
 use std::fmt::Alignment;
@@ -31,7 +31,7 @@ pub struct App {
     notes: FileList,
     selected_widget: SelectedWidget,
     error_output: Vec<String>,
-    help:bool,
+    help: bool,
 }
 
 pub struct FileList {
@@ -42,6 +42,7 @@ pub struct FileList {
     is_file: bool,
     is_dir: bool,
     is_active: bool,
+    create_folder: folder_creation,
 }
 
 pub struct SelectedWidget {
@@ -71,6 +72,11 @@ pub struct Scroll {
     x: u16,
 }
 
+pub struct folder_creation {
+    is_active: bool,
+    user_input: String,
+}
+
 impl Default for App {
     fn default() -> Self {
         Self {
@@ -79,7 +85,7 @@ impl Default for App {
             notes: FileList::default(),
             selected_widget: SelectedWidget::default(),
             error_output: vec![],
-            help:false,
+            help: false,
         }
     }
 }
@@ -103,6 +109,7 @@ impl Default for FileList {
             is_file: false,
             is_dir: false,
             is_active: true,
+            create_folder: folder_creation::default(),
         }
     }
 }
@@ -148,6 +155,15 @@ impl Default for FileSelection {
 impl Default for Scroll {
     fn default() -> Self {
         Self { y: 0, x: 0 }
+    }
+}
+
+impl Default for folder_creation {
+    fn default() -> Self {
+        Self {
+            is_active: false,
+            user_input: String::new(),
+        }
     }
 }
 
@@ -200,23 +216,27 @@ impl FileList {
         entry_name
     }
 
-    fn dir_ls(self: &mut Self)-> String{
+    fn dir_ls(self: &mut Self) -> String {
+        let path: String;
+        let none: String = String::from("none");
 
-        let path = self.items
-                    .get(self.state.selected().unwrap())
-                    .unwrap()
-                    .as_str().to_string();                      
+        if let Some(index) = self.state.selected() {
+            if let Some(item) = self.items.get(index) {
+                path = item.to_string();
+                let output = Command::new("bash")
+                    .arg("-c") // Use bash with -c to execute a command
+                    .arg(format!("ls {}", path))
+                    .output()
+                    .expect("failed to execute process");
 
-            let output = Command::new("bash")
-                .arg("-c") // Use bash with -c to execute a command
-                .arg(format!("ls {}", path))
-                .output()
-                .expect("failed to execute process");
-
-                String::from_utf8_lossy(&output.stdout).to_string()
+                return String::from_utf8_lossy(&output.stdout).to_string();
+            } else {
+                return none;
+            }
+        } else {
+            return none;
+        }
     }
-
-
 }
 
 impl SelectedWidget {
@@ -261,34 +281,117 @@ impl App {
     }
 
     fn handle_key_events(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            KeyCode::Up => self.previous(),
-            KeyCode::Down => self.next(),
-            // KeyCode::Char(c) => self.input.push(c),
-            // KeyCode::PageUp => self.input.push_str(self.notes.items.join(" ").as_str()),
-            KeyCode::End => self.input.push_str(self.notes.path.to_str().unwrap()),
-            KeyCode::Insert => self.input.push_str(
-                self.notes
-                    .items
-                    .get(self.notes.state.selected().unwrap())
-                    .unwrap()
-                    .as_str(),
-            ),
-            KeyCode::PageUp => self.notes.dir_next(),
-            KeyCode::PageDown => self.notes.dir_back(),
-            KeyCode::Enter => self.open_via_app(),
-            KeyCode::Char(' ') => self.select_files(),
-            KeyCode::Tab => self.selected_widget.change_widget(),
-            KeyCode::Char('m') => self.move_files(),
-            KeyCode::Char('c') => self.copy_files(),
-            KeyCode::Char('d') => self.delete_files(),
-            KeyCode::Char('h') => self.help = !self.help,
-            KeyCode::Char('t') => self.error_output.push(self.notes.dir_ls()),
-            KeyCode::Backspace => {
-                self.notes.selected_items.clear();
+        if self.notes.create_folder.is_active {
+            match key_event {
+                KeyEvent {
+                    code: KeyCode::Char('f'),
+                    modifiers,
+                    ..
+                } => {
+                    if modifiers.contains(KeyModifiers::CONTROL) {
+                        self.notes.create_folder.is_active = !self.notes.create_folder.is_active;
+                    } else {
+                        self.notes.create_folder.user_input.push('f');
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Backspace,
+                    ..
+                } => {
+                    self.notes.create_folder.user_input.pop();
+                }
+                KeyEvent {
+                    code: KeyCode::Char(c),
+                    ..
+                } => {
+                    self.notes.create_folder.user_input.push(c);
+                }
+
+                KeyEvent {
+                    code: KeyCode::Enter,
+                    ..
+                } => {
+                    //self.notes.create_dir();
+                }
+                _ => {}
             }
-            _ => {}
+        } else {
+            match key_event {
+                KeyEvent {
+                    code: KeyCode::Char('q'),
+                    ..
+                } => self.exit(),
+                KeyEvent {
+                    code: KeyCode::Up, ..
+                } => self.previous(),
+                KeyEvent {
+                    code: KeyCode::Down,
+                    ..
+                } => self.next(),
+                KeyEvent {
+                    code: KeyCode::End, ..
+                } => self.input.push_str(self.notes.path.to_str().unwrap()),
+                KeyEvent {
+                    code: KeyCode::Insert,
+                    ..
+                } => self.input.push_str(
+                    self.notes
+                        .items
+                        .get(self.notes.state.selected().unwrap())
+                        .unwrap()
+                        .as_str(),
+                ),
+                KeyEvent {
+                    code: KeyCode::PageUp,
+                    ..
+                } => self.notes.dir_next(),
+                KeyEvent {
+                    code: KeyCode::PageDown,
+                    ..
+                } => self.notes.dir_back(),
+                KeyEvent {
+                    code: KeyCode::Enter,
+                    ..
+                } => self.open_via_app(),
+                KeyEvent {
+                    code: KeyCode::Char(' '),
+                    ..
+                } => self.select_files(),
+                KeyEvent {
+                    code: KeyCode::Tab, ..
+                } => self.selected_widget.change_widget(),
+                KeyEvent {
+                    code: KeyCode::Char('m'),
+                    ..
+                } => self.move_files(),
+                KeyEvent {
+                    code: KeyCode::Char('c'),
+                    ..
+                } => self.copy_files(),
+                KeyEvent {
+                    code: KeyCode::Char('d'),
+                    ..
+                } => self.delete_files(),
+                KeyEvent {
+                    code: KeyCode::Char('h'),
+                    ..
+                } => self.help = !self.help,
+                KeyEvent {
+                    code: KeyCode::Char('t'),
+                    ..
+                } => self.error_output.push(self.notes.dir_ls()),
+                KeyEvent {
+                    code: KeyCode::Char('f'),
+                    ..
+                } => self.notes.create_folder.is_active = !self.notes.create_folder.is_active,
+                KeyEvent {
+                    code: KeyCode::Backspace,
+                    ..
+                } => {
+                    self.notes.selected_items.clear();
+                }
+                _ => {}
+            }
         }
     }
 
@@ -491,15 +594,15 @@ impl App {
                     Style::default()
                 };
                 let mut x = note.split('/').last().unwrap_or("Error").to_string();
-                match fs::metadata(note){
+                match fs::metadata(note) {
                     Ok(metadata) => {
-                        if metadata.is_dir(){
+                        if metadata.is_dir() {
                             x.push('/');
                         }
                     }
-                    _ =>{}
+                    _ => {}
                 }
-                
+
                 ListItem::new(x).style(style)
             })
             .collect();
@@ -573,25 +676,22 @@ impl App {
 
             text.push_str(&file_content);
         } else {
-                    let dir_items = self.notes.dir_ls();
-                 let mut dir_items: Vec<String>  = dir_items
-            .split('\n')
-            .map(
-                |item|{
-
+            let dir_items = self.notes.dir_ls();
+            let mut dir_items: Vec<String> = dir_items
+                .split('\n')
+                .map(|item| {
                     let mut item = item.to_string();
                     let mut path = self.notes.selected_item();
-                    path.push_str(format!("/{}",item).as_str());
+                    path.push_str(format!("/{}", item).as_str());
 
                     let path_buf = PathBuf::from(path.clone());
 
-                    if path_buf.is_dir(){
+                    if path_buf.is_dir() {
                         item.push('/');
                         item
-                    }else{
+                    } else {
                         item
                     }
-   
                 })
                 .collect();
             dir_items.pop();
@@ -608,8 +708,6 @@ impl App {
             self.selected_widget.file_preview.scroll.y,
             self.selected_widget.file_preview.scroll.x,
         );
-
-
 
         let preview = Paragraph::new(text)
             .wrap(Wrap { trim: true })
@@ -638,8 +736,8 @@ impl App {
                     let path_as_path = Path::new(path);
                     let extension: String;
                     match path_as_path.extension() {
-                        Some(ext) => {extension=ext.to_string_lossy().to_string()}
-                        None =>{extension=String::from("none")}
+                        Some(ext) => extension = ext.to_string_lossy().to_string(),
+                        None => extension = String::from("none"),
                     }
                     match fs::metadata(path) {
                         Ok(metadata) => {
@@ -719,8 +817,6 @@ impl App {
         //let text = self.notes.selected_item();
         //let text = self.error_output.join(", ");
 
-
-
         /*let text = vec![
                     self.selected_widget.file_list.is_active.to_string(),
                     self.selected_widget.file_preview.is_active.to_string(),
@@ -763,35 +859,40 @@ impl App {
         selection.render(area, buf);
     }
 
-    fn render_help(&mut self, area: Rect, buf: &mut Buffer){
-
-        let text = format!("↑↓ Navigate\n⏎ Open\n␣ Select\nPgUp/PgDn Dir Nav\nm Move\nc Copy\nd Delete\n󰭜 Clear Selected Files\nq Quit");
+    fn render_help(&mut self, area: Rect, buf: &mut Buffer) {
+        let text = format!(
+            "↑↓ Navigate\n⏎ Open\n␣ Select\nPgUp/PgDn Dir Nav\nm Move\nc Copy\nd Delete\n󰭜 Clear Selected Files\nq Quit"
+        );
         let mut len_text: Vec<usize> = text.split('\n').map(|string| string.len()).collect();
         len_text.sort();
-        let longest_text = len_text[len_text.len()-1];
-        
+        let longest_text = len_text[len_text.len() - 1];
 
-        self.error_output.push(format!("{:?}",longest_text));
-        let padding_top = (area.height - text.chars().filter(|&c| c == '\n').count() as u16)/2;
-        let padding_left = area.width/2 - (longest_text/2) as u16;
+        self.error_output.push(format!("{:?}", longest_text));
+        let padding_top = (area.height - text.chars().filter(|&c| c == '\n').count() as u16) / 2;
+        let padding_left = area.width / 2 - (longest_text / 2) as u16;
 
         let test = Paragraph::new(text)
-        .block(
-            Block::default()
-            .borders(Borders::ALL)
-            .padding(Padding { left: (padding_left), right: (0), top: (padding_top), bottom: (0) })
-        )
-        .alignment(layout::HorizontalAlignment::Left);
-        
+            .block(Block::default().borders(Borders::ALL).padding(Padding {
+                left: (padding_left),
+                right: (0),
+                top: (padding_top),
+                bottom: (0),
+            }))
+            .alignment(layout::HorizontalAlignment::Left);
+
         test.render(area, buf);
+    }
+
+    fn render_folder_creation(&mut self, area: Rect, buf: &mut Buffer) {
+        let text = Paragraph::new(format!("{}", self.notes.create_folder.user_input))
+            .block(Block::default().borders(Borders::ALL));
+
+        text.render(area, buf);
     }
 }
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-
-
-
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
@@ -809,14 +910,36 @@ impl Widget for &mut App {
 
         let overlay = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(10), Constraint::Fill(1),Constraint::Percentage(10)])
+            .constraints([
+                Constraint::Percentage(10),
+                Constraint::Fill(1),
+                Constraint::Percentage(10),
+            ])
             .split(area);
 
+        let folder_button_area = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(30),
+                Constraint::Fill(1),
+                Constraint::Percentage(30),
+            ])
+            .split(area);
 
+        let folder_button = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(30),
+                Constraint::Fill(1),
+                Constraint::Percentage(30),
+            ])
+            .split(folder_button_area[1]);
 
-        if self.help{
+        if self.help {
             self.render_help(overlay[1], buf);
-        }else{
+        } else if self.notes.create_folder.is_active {
+            self.render_folder_creation(folder_button[1], buf);
+        } else {
             self.render_list(second_sub_layout[0], buf);
             self.render_file_info(sub_layout[1], buf);
             self.render_file_preview(sub_layout[0], buf);
