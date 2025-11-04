@@ -1,8 +1,8 @@
-# 🦀 rustyFile
+# 🦀 cb-ls
 
-![rustyFile Screenshot](./images/screenshot.png)
+![cb-ls Screenshot](./images/screenshot.png)
 
-**rustyFile** is a small Rust project I built while learning Rust.  
+**cb-ls** is a small Rust project I built while learning Rust.  
 It’s a lightweight, barebones file explorer written in pure Rust.
 
 ---
@@ -16,9 +16,9 @@ New features or refinements might still be added over time.
 
 ## ⚙️ Installation
 
-You can build and install `rustyFile` using Cargo:
+You can build and install `cb-ls` using Cargo:
 
 ```bash
-git clone https://github.com/CGB145/rustyFile.git
-cd rustyFile
+git clone https://github.com/CGB145/cb-ls.git
+cd cb-ls
 cargo build --release
