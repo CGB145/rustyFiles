@@ -7,11 +7,12 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{
-    Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Widget, Wrap,
+    Block, BorderType, Borders, List, ListItem, ListState, Padding, Paragraph, Widget, Wrap
 };
 use ratatui::*;
+use std::fmt::Alignment;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus};
 use std::time::UNIX_EPOCH;
 use std::{fs, io};
 
@@ -29,6 +30,7 @@ pub struct App {
     notes: FileList,
     selected_widget: SelectedWidget,
     error_output: Vec<String>,
+    help:bool,
 }
 
 pub struct FileList {
@@ -76,6 +78,7 @@ impl Default for App {
             notes: FileList::default(),
             selected_widget: SelectedWidget::default(),
             error_output: vec![],
+            help:false,
         }
     }
 }
@@ -161,7 +164,7 @@ impl FileList {
             .map(|entry| entry.path().to_string_lossy().to_string())
             .collect();
 
-        items.sort_by(|a, b| compare(a, b));
+        //items.sort_by(|a, b| compare(a, b));
         self.items = items;
     }
 
@@ -195,6 +198,18 @@ impl FileList {
         }
         entry_name
     }
+
+    fn dir_ls(self: &mut Self)-> String{
+
+            let output = Command::new("ls")
+                .arg(self.selected_item())
+                .output()
+                .expect("failed to execute process");
+
+                String::from_utf8_lossy(&output.stdout).to_string()
+    }
+
+
 }
 
 impl SelectedWidget {
@@ -261,6 +276,7 @@ impl App {
             KeyCode::Char('m') => self.move_files(),
             KeyCode::Char('c') => self.copy_files(),
             KeyCode::Char('d') => self.delete_files(),
+            KeyCode::Char('h') => self.help = !self.help,
             KeyCode::Backspace => {
                 self.notes.selected_items.clear();
             }
@@ -446,13 +462,7 @@ impl App {
             .border_type(BorderType::Rounded)
             .border_style(border_color)
             .title_bottom(Line::from(vec![
-                Span::styled("↑↓ Navigate  ", Style::default().fg(Color::Cyan)).bold(),
-                Span::styled("⏎ Open  ", Style::default().fg(Color::Cyan)).bold(),
-                Span::styled("␣ Select  ", Style::default().fg(Color::Cyan)).bold(),
-                Span::styled("PgUp/PgDn Dir Nav  ", Style::default().fg(Color::Cyan)).bold(),
-                Span::styled("m Move  ", Style::default().fg(Color::Cyan)).bold(),
-                Span::styled("c Copy  ", Style::default().fg(Color::Cyan)).bold(),
-                Span::styled("d Delete  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("h Help  ", Style::default().fg(Color::Cyan)).bold(),
                 Span::styled("q Quit", Style::default().fg(Color::Red)).bold(),
             ]))
             .title(Line::from(Span::styled(
@@ -555,7 +565,7 @@ impl App {
 
             text.push_str(&file_content);
         } else {
-            text.push_str(&path);
+            text.push_str(&self.notes.dir_ls());
         }
 
         let border_color = if self.selected_widget.file_preview.is_active {
@@ -675,9 +685,10 @@ impl App {
     }
 
     fn render_selection(&mut self, area: Rect, buf: &mut Buffer) {
-        let text = self.notes.selected_items.join(", ");
+        //let text = self.notes.selected_items.join(", ");
         //let text = self.notes.selected_item();
-        //let text = self.error_output.join(", ");
+        let text = self.error_output.join(", ");
+        //let text = self.notes.dir_ls();
         /*let text = vec![
                     self.selected_widget.file_list.is_active.to_string(),
                     self.selected_widget.file_preview.is_active.to_string(),
@@ -719,10 +730,36 @@ impl App {
 
         selection.render(area, buf);
     }
+
+    fn render_help(&mut self, area: Rect, buf: &mut Buffer){
+
+        let text = format!("↑↓ Navigate\n⏎ Open\n␣ Select\nPgUp/PgDn Dir Nav\nm Move\nc Copy\nd Delete\n󰭜 Clear Selected Files\nq Quit");
+        let mut len_text: Vec<usize> = text.split('\n').map(|string| string.len()).collect();
+        len_text.sort();
+        let longest_text = len_text[len_text.len()-1];
+        
+
+        self.error_output.push(format!("{:?}",longest_text));
+        let padding_top = (area.height - text.chars().filter(|&c| c == '\n').count() as u16)/2;
+        let padding_left = area.width/2 - (longest_text/2) as u16;
+
+        let test = Paragraph::new(text)
+        .block(
+            Block::default()
+            .borders(Borders::ALL)
+            .padding(Padding { left: (padding_left), right: (0), top: (padding_top), bottom: (0) })
+        )
+        .alignment(layout::HorizontalAlignment::Left);
+        
+        test.render(area, buf);
+    }
 }
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
+
+
+
         let layout = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
@@ -738,9 +775,20 @@ impl Widget for &mut App {
             .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
             .split(layout[0]);
 
-        self.render_list(second_sub_layout[0], buf);
-        self.render_file_info(sub_layout[1], buf);
-        self.render_file_preview(sub_layout[0], buf);
-        self.render_selection(second_sub_layout[1], buf);
+        let overlay = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(10), Constraint::Fill(1),Constraint::Percentage(10)])
+            .split(area);
+
+
+
+        if self.help{
+            self.render_help(overlay[1], buf);
+        }else{
+            self.render_list(second_sub_layout[0], buf);
+            self.render_file_info(sub_layout[1], buf);
+            self.render_file_preview(sub_layout[0], buf);
+            self.render_selection(second_sub_layout[1], buf);
+        }
     }
 }
