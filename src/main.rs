@@ -42,7 +42,7 @@ pub struct FileList {
     is_file: bool,
     is_dir: bool,
     is_active: bool,
-    create_folder: folder_creation,
+    create_folder: FolderCreation,
 }
 
 pub struct SelectedWidget {
@@ -72,7 +72,7 @@ pub struct Scroll {
     x: u16,
 }
 
-pub struct folder_creation {
+pub struct FolderCreation {
     is_active: bool,
     user_input: String,
 }
@@ -109,7 +109,7 @@ impl Default for FileList {
             is_file: false,
             is_dir: false,
             is_active: true,
-            create_folder: folder_creation::default(),
+            create_folder: FolderCreation::default(),
         }
     }
 }
@@ -158,7 +158,7 @@ impl Default for Scroll {
     }
 }
 
-impl Default for folder_creation {
+impl Default for FolderCreation {
     fn default() -> Self {
         Self {
             is_active: false,
@@ -176,7 +176,7 @@ impl FileList {
             Err(_) => return,
         };
 
-        let mut items: Vec<String> = entries
+        let items: Vec<String> = entries
             .filter_map(Result::ok)
             .map(|entry| entry.path().to_string_lossy().to_string())
             .collect();
@@ -237,6 +237,29 @@ impl FileList {
             return none;
         }
     }
+
+    fn create_folder(self: &mut Self){
+        let mut path: String;
+
+        if let Some(index) = self.state.selected() {
+            if let Some(item) = self.items.get(index) {
+                path = item.to_string();
+
+                path = if let Some(index) = path.rfind('/'){
+                    path[..index].to_string()
+                }else {
+                    path
+                };
+
+                Command::new("mkdir")
+                    .arg(format!("{}/{}", path,self.create_folder.user_input))
+                    .output()
+                    .expect("failed to execute process");
+                self.update();
+                self.create_folder.user_input.clear();
+            }
+    }
+}
 }
 
 impl SelectedWidget {
@@ -311,7 +334,7 @@ impl App {
                     code: KeyCode::Enter,
                     ..
                 } => {
-                    //self.notes.create_dir();
+                    self.notes.create_folder();
                 }
                 _ => {}
             }
