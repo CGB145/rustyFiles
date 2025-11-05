@@ -1,7 +1,7 @@
 use chrono::DateTime;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::*;
-use natord::compare;
+//use natord::compare;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
@@ -10,10 +10,8 @@ use ratatui::widgets::{
     Block, BorderType, Borders, List, ListItem, ListState, Padding, Paragraph, Widget, Wrap,
 };
 use ratatui::*;
-use std::fmt::Alignment;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus};
-use std::str::FromStr;
+use std::process::{Command,};
 use std::time::UNIX_EPOCH;
 use std::{fs, io};
 
