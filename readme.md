@@ -22,3 +22,5 @@ You can build and install `cb-ls` using Cargo:
 git clone https://github.com/CGB145/cb-ls.git
 cd cb-ls
 cargo build --release
+```
+Note: Currently, the application does not function correctly when accessing an empty folder.
