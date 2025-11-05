@@ -238,29 +238,29 @@ impl FileList {
         }
     }
 
-    fn create_folder(self: &mut Self){
+    fn create_folder(self: &mut Self) {
         let mut path: String;
 
         if let Some(index) = self.state.selected() {
             if let Some(item) = self.items.get(index) {
                 path = item.to_string();
 
-                path = if let Some(index) = path.rfind('/'){
+                path = if let Some(index) = path.rfind('/') {
                     path[..index].to_string()
-                }else {
+                } else {
                     path
                 };
 
                 Command::new("mkdir")
-                    .arg(format!("{}/{}", path,self.create_folder.user_input))
+                    .arg(format!("{}/{}", path, self.create_folder.user_input))
                     .output()
                     .expect("failed to execute process");
                 self.update();
                 self.create_folder.user_input.clear();
             }
+        }
     }
-}
-    fn create_file(self: &mut Self){
+    fn create_file(self: &mut Self) {
         //ToDo
     }
 }
@@ -558,15 +558,28 @@ impl App {
         let selection = &self.notes.selected_items;
 
         for item in selection {
-            let output = Command::new("rm")
-                .arg(item)
-                .arg(self.notes.path.to_str().unwrap())
-                .output()
-                .expect("failed to execute process");
+            let item_as_path = PathBuf::from(&item);
 
-            let status = output.status;
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            self.error_output.push(format!("{}, {}", status, stderr));
+            if item_as_path.is_dir() {
+                let output = Command::new("rm")
+                    .arg("-rf")
+                    .arg(item)
+                    .output()
+                    .expect("failed to execute process");
+
+                let status = output.status;
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                self.error_output.push(format!("{}, {}", status, stderr));
+            } else {
+                let output = Command::new("rm")
+                    .arg(item)
+                    .output()
+                    .expect("failed to execute process");
+
+                let status = output.status;
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                self.error_output.push(format!("{}, {}", status, stderr));
+            }
         }
 
         self.notes.update();
@@ -910,15 +923,13 @@ impl App {
     }
 
     fn render_input_button(&mut self, area: Rect, buf: &mut Buffer) {
-        let text = Paragraph::new(format!("{}", self.notes.create_folder.user_input))
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .title_bottom(vec![                
-                    Span::styled("⏎  Create Folder  ", Style::default().fg(Color::Cyan)).bold(),
-                    Span::styled("^f  Return  ", Style::default().fg(Color::Cyan)).bold(),
-                    Span::styled("q Quit", Style::default().fg(Color::Red)).bold(),
-                    ])
-            );
+        let text = Paragraph::new(format!("{}", self.notes.create_folder.user_input)).block(
+            Block::default().borders(Borders::ALL).title_bottom(vec![
+                Span::styled("⏎  Create Folder  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("^f  Return  ", Style::default().fg(Color::Cyan)).bold(),
+                Span::styled("q Quit", Style::default().fg(Color::Red)).bold(),
+            ]),
+        );
 
         text.render(area, buf);
     }
