@@ -43,6 +43,7 @@ pub struct FileList {
     is_dir: bool,
     is_active: bool,
     create_folder: FolderCreation,
+    creat_file: FileCreation,
 }
 
 pub struct SelectedWidget {
@@ -73,6 +74,11 @@ pub struct Scroll {
 }
 
 pub struct FolderCreation {
+    is_active: bool,
+    user_input: String,
+}
+
+pub struct FileCreation {
     is_active: bool,
     user_input: String,
 }
@@ -110,6 +116,7 @@ impl Default for FileList {
             is_dir: false,
             is_active: true,
             create_folder: FolderCreation::default(),
+            creat_file: FileCreation::default(),
         }
     }
 }
@@ -159,6 +166,15 @@ impl Default for Scroll {
 }
 
 impl Default for FolderCreation {
+    fn default() -> Self {
+        Self {
+            is_active: false,
+            user_input: String::new(),
+        }
+    }
+}
+
+impl Default for FileCreation {
     fn default() -> Self {
         Self {
             is_active: false,
@@ -261,7 +277,30 @@ impl FileList {
         }
     }
     fn create_file(self: &mut Self) {
-        //ToDo
+        let mut path: String;
+
+        if let Some(index) = self.state.selected() {
+            if let Some(item) = self.items.get(index) {
+                path = item.to_string();
+
+                path = if let Some(index) = path.rfind('/') {
+                    path[..index].to_string()
+                } else {
+                    path
+                };
+
+                Command::new("touch")
+                    .arg(format!(
+                        "{}/{}",
+                        path,
+                        self.creat_file.user_input.to_string()
+                    ))
+                    .output()
+                    .expect("failed to execute process");
+                self.update();
+                self.creat_file.user_input.clear();
+            }
+        }
     }
 }
 
@@ -341,6 +380,40 @@ impl App {
                 }
                 _ => {}
             }
+        } else if self.notes.creat_file.is_active {
+            match key_event {
+                KeyEvent {
+                    code: KeyCode::Char('t'),
+                    modifiers,
+                    ..
+                } => {
+                    if modifiers.contains(KeyModifiers::CONTROL) {
+                        self.notes.creat_file.is_active = !self.notes.creat_file.is_active;
+                    } else {
+                        self.notes.creat_file.user_input.push('t');
+                    }
+                }
+                KeyEvent {
+                    code: KeyCode::Backspace,
+                    ..
+                } => {
+                    self.notes.creat_file.user_input.pop();
+                }
+                KeyEvent {
+                    code: KeyCode::Char(c),
+                    ..
+                } => {
+                    self.notes.creat_file.user_input.push(c);
+                }
+
+                KeyEvent {
+                    code: KeyCode::Enter,
+                    ..
+                } => {
+                    self.notes.create_file();
+                }
+                _ => {}
+            }
         } else {
             match key_event {
                 KeyEvent {
@@ -404,12 +477,23 @@ impl App {
                 } => self.help = !self.help,
                 KeyEvent {
                     code: KeyCode::Char('t'),
+                    modifiers,
                     ..
-                } => self.error_output.push(self.notes.dir_ls()),
+                } => {
+                    if modifiers.contains(KeyModifiers::CONTROL) {
+                        self.notes.creat_file.is_active = !self.notes.creat_file.is_active
+                    }
+                }
                 KeyEvent {
                     code: KeyCode::Char('f'),
+                    modifiers,
                     ..
-                } => self.notes.create_folder.is_active = !self.notes.create_folder.is_active,
+                } => {
+                    if modifiers.contains(KeyModifiers::CONTROL) {
+                        self.notes.create_folder.is_active = !self.notes.create_folder.is_active
+                    }
+                }
+
                 KeyEvent {
                     code: KeyCode::Backspace,
                     ..
@@ -900,7 +984,7 @@ impl App {
 
     fn render_help(&mut self, area: Rect, buf: &mut Buffer) {
         let text = format!(
-            "↑↓ Navigate\n⏎ Open\n␣ Select\nPgUp/PgDn Dir Nav\nm Move\nc Copy\nd Delete\n^f  Create Folder\n󰭜 Clear Selected Files\nq Quit"
+            "↑↓ Navigate\n⏎ Open\n␣ Select\nPgUp/PgDn Dir Nav\nm Move\nc Copy\nd Delete\n^f Create Folder\n^t Create File\n󰭜 Clear Selected Files\nq Quit"
         );
         let mut len_text: Vec<usize> = text.split('\n').map(|string| string.len()).collect();
         len_text.sort();
@@ -923,15 +1007,33 @@ impl App {
     }
 
     fn render_input_button(&mut self, area: Rect, buf: &mut Buffer) {
-        let text = Paragraph::new(format!("{}", self.notes.create_folder.user_input)).block(
-            Block::default().borders(Borders::ALL).title_bottom(vec![
-                Span::styled("⏎  Create Folder  ", Style::default().fg(Color::Cyan)).bold(),
-                Span::styled("^f  Return  ", Style::default().fg(Color::Cyan)).bold(),
-                Span::styled("q Quit", Style::default().fg(Color::Red)).bold(),
-            ]),
-        );
+        if self.notes.create_folder.is_active {
+            let text = Paragraph::new(format!("{}", self.notes.create_folder.user_input)).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(vec![Span::from(" Input Folder Name")])
+                    .title_bottom(vec![
+                        Span::styled("⏎ Create Folder", Style::default().fg(Color::Cyan)).bold(),
+                        Span::raw("  "),
+                        Span::styled("^f Close", Style::default().fg(Color::Red)).bold(),
+                    ]),
+            );
 
-        text.render(area, buf);
+            text.render(area, buf);
+        } else {
+            let text = Paragraph::new(format!("{}", self.notes.creat_file.user_input)).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(vec![Span::from(" Input File Name")])
+                    .title_bottom(vec![
+                        Span::styled("⏎ Create File", Style::default().fg(Color::Cyan)).bold(),
+                        Span::raw("  "),
+                        Span::styled("^t Close", Style::default().fg(Color::Red)).bold(),
+                    ]),
+            );
+
+            text.render(area, buf);
+        }
     }
 }
 
@@ -981,7 +1083,7 @@ impl Widget for &mut App {
 
         if self.help {
             self.render_help(overlay[1], buf);
-        } else if self.notes.create_folder.is_active {
+        } else if self.notes.create_folder.is_active || self.notes.creat_file.is_active {
             self.render_input_button(input_button[1], buf);
         } else {
             self.render_list(second_sub_layout[0], buf);
