@@ -260,6 +260,9 @@ impl FileList {
             }
     }
 }
+    fn create_file(self: &mut Self){
+        //ToDo
+    }
 }
 
 impl SelectedWidget {
@@ -884,7 +887,7 @@ impl App {
 
     fn render_help(&mut self, area: Rect, buf: &mut Buffer) {
         let text = format!(
-            "↑↓ Navigate\n⏎ Open\n␣ Select\nPgUp/PgDn Dir Nav\nm Move\nc Copy\nd Delete\n󰭜 Clear Selected Files\nq Quit"
+            "↑↓ Navigate\n⏎ Open\n␣ Select\nPgUp/PgDn Dir Nav\nm Move\nc Copy\nd Delete\n^f  Create Folder\n󰭜 Clear Selected Files\nq Quit"
         );
         let mut len_text: Vec<usize> = text.split('\n').map(|string| string.len()).collect();
         len_text.sort();
@@ -906,9 +909,16 @@ impl App {
         test.render(area, buf);
     }
 
-    fn render_folder_creation(&mut self, area: Rect, buf: &mut Buffer) {
+    fn render_input_button(&mut self, area: Rect, buf: &mut Buffer) {
         let text = Paragraph::new(format!("{}", self.notes.create_folder.user_input))
-            .block(Block::default().borders(Borders::ALL));
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .title_bottom(vec![                
+                    Span::styled("⏎  Create Folder  ", Style::default().fg(Color::Cyan)).bold(),
+                    Span::styled("^f  Return  ", Style::default().fg(Color::Cyan)).bold(),
+                    Span::styled("q Quit", Style::default().fg(Color::Red)).bold(),
+                    ])
+            );
 
         text.render(area, buf);
     }
@@ -940,7 +950,7 @@ impl Widget for &mut App {
             ])
             .split(area);
 
-        let folder_button_area = Layout::default()
+        let input_button_area = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Percentage(30),
@@ -949,19 +959,19 @@ impl Widget for &mut App {
             ])
             .split(area);
 
-        let folder_button = Layout::default()
+        let input_button = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Percentage(30),
+                Constraint::Percentage(45),
                 Constraint::Fill(1),
-                Constraint::Percentage(30),
+                Constraint::Percentage(45),
             ])
-            .split(folder_button_area[1]);
+            .split(input_button_area[1]);
 
         if self.help {
             self.render_help(overlay[1], buf);
         } else if self.notes.create_folder.is_active {
-            self.render_folder_creation(folder_button[1], buf);
+            self.render_input_button(input_button[1], buf);
         } else {
             self.render_list(second_sub_layout[0], buf);
             self.render_file_info(sub_layout[1], buf);
