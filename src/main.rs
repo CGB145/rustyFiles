@@ -711,7 +711,10 @@ impl App {
             .map(|(i, note)| {
                 let style = if Some(i) == selected_item {
                     Style::default().fg(Color::Blue).bg(Color::White)
-                } else {
+                } else if  self.notes.selected_items.contains(note){
+                    Style::default().fg(Color::Blue).bg(Color::DarkGray)
+                }
+                else {
                     Style::default()
                 };
                 let mut x = note.split('/').last().unwrap_or("Error").to_string();
